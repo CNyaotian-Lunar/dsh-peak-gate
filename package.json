@@ -1,0 +1,52 @@
+{
+  "name": "dsh-peak-gate",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness 峰谷守门（peak gate）：高峰时段拦重活、压缩输出上限、工具预算、峰时精简输出；含中国法定节假日自动日历与一键放行口令。",
+  "type": "module",
+  "main": "lib/index.mjs",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.1.7-rc.2": "compatible"
+      }
+    }
+  },
+  "peerDependencies": {
+    "schemastery": "*",
+    "@deepseek-ai/dsh-llm": "*"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "peak",
+    "off-peak",
+    "pricing",
+    "budget",
+    "cost-control",
+    "holidays"
+  ],
+  "license": "MIT",
+  "author": "CNyaotian-Lunar",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CNyaotian-Lunar/dsh-peak-gate.git"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
