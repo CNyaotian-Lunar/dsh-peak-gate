@@ -222,8 +222,8 @@ Note: `!force` **applies to the whole turn** — it both passes this request and
 
 ## 配置 / Configuration
 
-命名空间 `peak-gate`，写在 `~/.dsh/profiles/web/cordis.patch.yml`，**热改即时生效，无需重启**：
-**English:** The namespace is `peak-gate`, written in `~/.dsh/profiles/web/cordis.patch.yml`; **hot edits take effect immediately, no restart needed**:
+命名空间 `peak-gate`，写在 `~/.dsh/profiles/<profile>/cordis.patch.yml`，**热改即时生效，无需重启**：
+**English:** The namespace is `peak-gate`, written in `~/.dsh/profiles/<profile>/cordis.patch.yml`; **hot edits take effect immediately, no restart needed**:
 
 ```yaml
 peak-gate:
@@ -280,8 +280,8 @@ peak-gate:
 
 ```powershell
 # 离线自测（155 项）：依赖 DSH 提供的 schemastery / @deepseek-ai/dsh-llm，
-# 所以要在 <DSH_HOME>/profiles/web/node_modules 的解析链内运行
-cd <DSH_HOME>/profiles/web/vendor/dsh-peak-gate-src
+# 所以要在 <DSH_HOME>/profiles/<profile>/node_modules 的解析链内运行
+cd <DSH_HOME>/profiles/<profile>/vendor/dsh-peak-gate-src
 node test/selftest.mjs
 ```
 
@@ -311,7 +311,7 @@ node test/selftest.mjs
 ## 卸载 / 回滚 / Uninstall / Rollback
 
 ```powershell
-cd ~/.dsh/profiles/web
+cd ~/.dsh/profiles/<profile>
 Copy-Item package.json.bak-peakgate-<timestamp> package.json -Force   # 恢复改动前的 package.json / restore the previous package.json
 pnpm install      # 重新解析依赖 / re-resolve dependencies
 # 然后重启 dsh web / then restart dsh web
