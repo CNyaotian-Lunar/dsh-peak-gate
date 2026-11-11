@@ -1,0 +1,8 @@
+# dsh-peak-gate bundle patch：向 web profile 注入「峰谷守门」插件行。
+# Node half（lib/index.mjs）监听 agent/pre-step 与 agent/request 两个 waterfall：
+#   - agent/pre-step：峰时拦下「大任务」（返回 { kind: 'reject' }，该轮一个 token 都不发）
+#   - agent/request：峰时压缩单次请求的 maxTokens 上限
+# 配置命名空间 `peak-gate`，可在 settings 里热改，无需重启。
+- insert:
+    - id: peak-gate
+      name: 'dsh-peak-gate'
