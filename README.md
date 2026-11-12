@@ -174,11 +174,30 @@
 
 **English:** ⚠️ **The classification call must have reasoning turned off** (`classifierReasoningEffort: 'off'`, the default): the session default `reasoningEffort: high` **enables thinking**, and thinking tokens eat up all of `maxTokens: 6` — not a single letter of the answer comes out, so every attempt lands on "classification undecided → pass through", which looks as though the classifier were not working at all (**hit in a real-machine test on 2026-09-11**). If some route does not support `off`, the plugin automatically falls back to the default level and retries once with the limit raised to 32 tokens.
 
-**第 3 层停下时长什么样**：不发任何模型请求，直接把一条提示**写进会话**
-（`session.append('user/message', …)`，与 agent loop 自己落消息同款），界面立刻可见；
-然后返回 **`{kind:'reject'}`** 结束本轮。
+**第 3 层停下时长什么样**：这一轮**不会发出任何主对话请求** —— 插件在 `agent/pre-step` 里
+抛一个哨兵错误，宿主据此把本轮以 `turn/end kind=error` 收尾，前端就会渲染
+「本轮运行失败」+ 完整文案。这是宿主里**唯一**「零对话请求 + 前端一定可见」的通道：
+`{kind:'reject'}` 虽然也是零请求，但前端对它一片空白，用户只看到自己的话被吞掉。
 
-**English:** **What layer 3 stopping looks like**: it sends no model request at all; it writes a notice **straight into the session** (`session.append('user/message', …)`, the same call the agent loop itself uses to record messages), so it is visible in the UI immediately; then it returns **`{kind:'reject'}`** to end the turn.
+提示里会写清：估算大小、为什么被判重活、**原文回显**（超 1200 字只回显前 1200 字 + 落盘路径）、
+以及已经带好 `!force` 的重发块（复制即发）。**原文一律落盘**到
+`~/.dsh/data/peak-gate/blocked/`，因为被拦的消息不会进会话记录，丢了就是真丢了。
+
+> 🩸 **关于「没有发给模型」这句文案**：如果这次判定走了第 2 层分类器，**你这句的前 500 字**
+> 是真的发出去过（一次真实模型请求，只要它回一个字母）。提示文案会如实写这一点，
+> 不会假装什么都没发 —— 2026-11-12 之前这行写的是「没有发给模型」，那是对用户撒谎，已改。
+
+> ⚠️ **已知副作用**：宿主在收到 `agent/error` 时会把当前 `armed` 的 goal 解除武装
+> （`dsh-goal-round-driver` 的 `disarm`）。所以峰时被拦一次重活，正在自动推进的 goal 会被暂停。
+> 插件检测到 armed goal 时会在提示里明说，并告诉你继续说「继续」即可恢复。
+
+**English:** **What layer 3 stopping looks like**: this turn **sends no main conversation request at all** — the plugin throws a sentinel error inside `agent/pre-step`, the host wraps the turn up with `turn/end kind=error`, and the front end renders "this run failed" plus the full explanation. That is the **only** channel in the host that is both **zero-request and guaranteed visible**: `{kind:'reject'}` is also request-free, but the front end shows nothing for it, so the user just sees their message vanish.
+
+The notice states the estimated size, why it was judged heavy, an **echo of the original text** (first 1200 chars, with an on-disk path beyond that), and a paste-ready `!force` block. **The original text is always dumped to disk** under `~/.dsh/data/peak-gate/blocked/`, because a blocked message never enters the session record — if it is not dumped, it is gone.
+
+> 🩸 **On the "nothing was sent to the model" wording**: if the decision went through the layer-2 classifier, **the first 500 characters of your message really were sent** (one real model request that only has to answer a single letter). The notice says so honestly. Before 2026-11-12 it claimed "nothing was sent to the model", which was a lie to the user.
+
+> ⚠️ **Known side effect**: on `agent/error` the host disarms any `armed` goal (`dsh-goal-round-driver`'s `disarm`). So one blocked heavy task during peak hours pauses a goal that was auto-advancing. When an armed goal is detected, the notice says so and tells you to reply "continue" to resume it.
 
 > 🩸 曾经以为「返回空 messages 就能让本轮自然收尾」—— **真机实测是错的**。
 > `dsh-agent-loop` 的闸门是 `if (turnEnds && decision.messages.length === 0) break`，
@@ -198,17 +217,22 @@
 
 ## 拦截方式（`onBlock`）/ How It Blocks (`onBlock`)
 
+> 🩸 **2026-11-12 起两个值行为已一致**：都走 turn error 通道（抛哨兵，本轮以 `turn/end kind=error` 收尾），
+> 都是零对话请求、都看得见。`replace` 这个名字是历史遗留（它早先返回的是
+> `{kind:'enter', messages:[…原消息, 提示]}` —— **原消息还在 messages 里，历史上下文照样全量发送，等于没省**），
+> 配置项保留只为兼容旧配置，没有实际区别了。
+
 | 值 | 行为 | 成本 | 体验 |
 |---|---|---|---|
-| `replace`（默认） | 用一条短提示顶替掉这次大请求 | 省 95%+ | 用户能立刻看到「被拦了 + 怎么放行」 |
-| `reject` | 该轮直接 `blocked`，一个 token 都不发 | 零 | 界面静默，原因只进日志 |
+| `replace`（默认） | 抛哨兵 → 本轮 `turn/end kind=error` | 零对话请求 | 看得见「本轮运行失败 + 完整文案」 |
+| `reject` | 同上 | 零对话请求 | 同上 |
 
-**English:**
+**English:** Since 2026-11-12 both values behave identically: both throw the sentinel and let the turn end as `turn/end kind=error` — zero conversation requests, and both visible. `replace` is a historical name (it used to return `{kind:'enter', messages:[…original messages, notice]}`, which kept the original messages in the request, so the whole history was still sent and nothing was saved). The option is kept for backward compatibility only.
 
 | Value | Behaviour | Cost | Experience |
 |---|---|---|---|
-| `replace` (default) | replaces this big request with a short notice | saves 95%+ | the user immediately sees "it was blocked + how to force it through" |
-| `reject` | blocks the turn outright, not a single token is sent | zero | the UI stays silent, the reason only goes to the log |
+| `replace` (default) | throws the sentinel → `turn/end kind=error` | zero conversation requests | shows "this run failed + full notice" |
+| `reject` | same as above | zero conversation requests | same as above |
 
 ## 一键放行 / One-Word Force Pass
 
@@ -260,8 +284,8 @@ peak-gate:
   subagentMaxTokens: 16384
   manageSubagents: true             # 是否管子代理（输出上限 + 是否拦）
   blockSubagents: false             # 是否真拦子代理的大任务（默认不拦，免得主任务断掉）
-  onBlock: replace                  # replace | reject
-  warnOncePerSession: true          # 仅 reject 方式有意义
+  onBlock: replace                  # replace | reject（2026-11-12 起两者行为一致，保留仅为兼容）
+  warnOncePerSession: true          # 历史选项：两值行为合并后已不生效
   dryRun: false                     # 只记日志不真拦
 ```
 
@@ -344,10 +368,11 @@ pnpm install      # 重新解析依赖 / re-resolve dependencies
   写程序的工具循环（动辄上万 token）可以忽略，但它确实是「每条够长的输入都问一次」的成本模型；
   想省就调高 `classifierMinChars` / 调低 `useModelClassifier`。
   **English:** **Model classification costs one extra call**: each heavy/light decision is about a few dozen tokens (`maxTokens: 6`). Next to blocking one program-writing tool loop (easily tens of thousands of tokens) that is negligible, but it really is a cost model of "ask once for every input that is long enough"; to save, raise `classifierMinChars` / turn down `useModelClassifier`.
-- **停下的那一轮没有模型收尾**：第 3 层是「不发请求、直接落提示」，所以用户看到的是进度停住 +
-  一条说明，而不是模型自己写的总结。要继续就带 `!force` 重发，或把 `peakMaxSteps` 调大。
+- **停下的那一轮没有模型收尾**：第 3 层是「不发请求」，所以用户看到的是进度停住 + 一条说明，
+  而不是模型自己写的总结。要继续就带 `!force` 重发，或把 `peakMaxSteps` 调大。
   **English:** **The turn that gets stopped has no model sign-off**: layer 3 is "send no request, drop a notice instead", so what the user sees is progress halting plus an explanation, not a summary written by the model. To carry on, resend with `!force`, or raise `peakMaxSteps`.
-- **`reject` 方式界面静默**：被拦的消息不进会话记录，会看到"发出去没反应"。默认的 `replace` 没这问题。
+- **被拦时显示为「本轮运行失败」**：这是用 turn error 通道换可见性的代价（宿主里没有别的「零请求 + 可见」通道）。
+  文案里已写明「这是拦截，不是故障」，但界面上确实是红字。如果宿主将来提供专用通道，会换过去。
   **English:** **The `reject` mode is silent in the UI**: the blocked message does not enter the session record, so it looks like "sent but nothing happened". The default `replace` does not have this problem.
 - **不做记账**：目前只在日志里记拦截次数，没有「今天省了多少钱」的面板。要做需要订阅 `llm/stream`
   采真实 usage + 落盘 + client 半边（市场里 `dsh-peak-cost-mode` 是完整形态，可参考）。
